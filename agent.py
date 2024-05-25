@@ -60,6 +60,7 @@ class Agent:
 
         init_prompt = "Hey, talk to me"
         
+        # add some logic for figuring out how long they should interact
         for i in range(5):
             if i == 0:
                 home_response = home_agent.forward(prompt=init_prompt, settings_context=self.settings_context)
@@ -91,43 +92,56 @@ class AgentChatModule(dspy.Module):
         self.db = db
         self.agent_id = agent_id
         self.model = model
+        self.validate_relevance_module = RelevanceChecker()
 
+    # creates response (with some guidance from relevance check)
     def forward(self, prompt, settings_context):
+        ###### memories -> context
+        # add preprocessing logic here (llm write vector db query)
         retrieved_memories = str(self.db.get_agent_memory(self.agent_id, prompt))
 
-        rationale_type = dspy.OutputField(
-            prefix="Reasoning: Let's think step by step in order to",
-            desc="respond casually, either drawing connections between the prompt and retrieved memory, or bringing up things from your memory if the prompt is not relevant. We ...",
-        )
-
-        max_retries = 10
+        ###### context -> response
+        # retry logic
+        max_retries = 3
         for attempt in range(max_retries):
-            initial_response = dspy.ChainOfThought(self.AgentChatSignature, rationale_type=rationale_type)(
-                settings_context=settings_context,
-                prompt=prompt,
-                memory_retrieval=retrieved_memories
-            ).answer
+            if attempt > 0:
+                prompt = f"The prompt is: '{prompt}'. The previous attempted response of {initial_response} was not relevant to the context, let's try again."
+            
+            initial_response = dspy.ChainOfThought(
+                self.AgentChatSignature, 
+                rationale_type=dspy.OutputField(
+                    prefix="Reasoning: Let's think step by step in order to",
+                    desc="respond casually, either drawing connections between the prompt and retrieved memory, or bringing up things from your memory if the prompt is not relevant. We ...",
+                ))(
+                    settings_context=settings_context,
+                    prompt=prompt,
+                    memory_retrieval=retrieved_memories
+                ).answer
 
-            try:
-                # suggestion not assetion
-                dspy.Assert(
-                    validate_relevance(prompt, initial_response, retrieved_memories),
-                    "Response must be relevant to retrieved memories.",
-                )
+            # validate response relevance
+            is_relevant = self.validate_relevance_module(
+                prompt=prompt,
+                response=initial_response,
+                retrieved_memories=retrieved_memories
+            )
+
+            # retry if not relevant
+            if is_relevant:
                 return {"answer": initial_response}
-            except Exception as e:
+            else:
                 if attempt < max_retries - 1:
                     print(f"Attempt {attempt + 1} failed. Retrying...")
                     continue
                 else:
-                    return {"answer": initial_response}
-
+                    return {"answer": "Sorry, I couldn't generate a relevant response based on my memories."}
 
 ########################## METRIC CHECKERS ##########################
 
-
-def validate_relevance(prompt, response, memories):
-    class ValidateRelevance(dspy.Signature):
+# make a fact checker module. they should not make up any information, only use the context and converstation.
+                
+# outputs a boolean indicating if the response is relevant to the prompt and retrieved memories
+class RelevanceChecker(dspy.Module):
+    class ValidateRelevanceSignature(dspy.Signature):
         """
         Decide if the response makes sense, it should:
         - be relevant to the prompt
@@ -136,23 +150,24 @@ def validate_relevance(prompt, response, memories):
         """
         
         prompt = dspy.InputField(desc="Prompt to which we are responding")
-        response = dspy.InputField(desc="potential response to the prompt")
-        retrieved_memories = dspy.InputField(desc="retrieved memories")
+        response = dspy.InputField(desc="Potential response to the prompt")
+        retrieved_memories = dspy.InputField(desc="Retrieved memories")
         answer = dspy.OutputField(desc="Yes or No")
 
+    def forward(self, prompt, response, retrieved_memories):
+        rationale_type = dspy.OutputField(
+            prefix="Reasoning: Let's think step by step in order to",
+            desc="Figure out if this response aligns with the conversation and our goal of making connections based on things in our memory, without making anything up. ...",
+        )
 
-    rationale_type = dspy.OutputField(
-        prefix="Reasoning: Let's think step by step in order to",
-        desc="figure out if this response aligns with the conversation and our goal of making connections based on things in our memory, without making anything up. ...",
-    )
+        result = dspy.ChainOfThought(self.ValidateRelevanceSignature, rationale_type=rationale_type)(
+            prompt=prompt,
+            response=response,
+            retrieved_memories=retrieved_memories
+        ).answer
 
-    result = dspy.ChainOfThought(ValidateRelevance, rationale_type=rationale_type)(
-        prompt=prompt,
-        response=response,
-        retrieved_memories=memories
-    ).answer
+        return "Yes" in result
 
-    return "Yes" in result
 
 ####################### USER CHAT MODULES (AND SIGS) ############################
 
