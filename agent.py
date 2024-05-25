@@ -1,5 +1,6 @@
 import os
 import dspy
+import functools
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 import weaviate
@@ -30,7 +31,6 @@ class Agent:
         dspy.settings.configure(lm=self.turbo)
         print("Language model configured successfully.")
 
-
 ######################## USER CHAT ########################
 
     def handle_user_chat(self, message):
@@ -50,50 +50,111 @@ class Agent:
             return user_response["answer"]
         
 ######################### AGENTS CHAT ########################
+        
     def handle_agent_interaction(self, partner_agent_id):
-        home_agent = AgentChatModule(self.db, self.agent_id)
-        away_agent = AgentChatModule(self.db, partner_agent_id)
+        home_agent_model = dspy.OpenAI(model="gpt-3.5-turbo", max_tokens=2000, model_type="chat", temperature=0.8)
+        away_agent_model = dspy.OpenAI(model="gpt-3.5-turbo", max_tokens=2000, model_type="chat", temperature=0.8)
 
-        init_prompt = "Hello, how are you?"
-        # away_response = away_agent(prompt=init_prompt, settings_context=self.settings_context)
+        home_agent = AgentChatModule(self.db, self.agent_id, home_agent_model)
+        away_agent = AgentChatModule(self.db, partner_agent_id, away_agent_model)
+
+        init_prompt = "Hey, talk to me"
         
         for i in range(5):
             if i == 0:
-                home_response = home_agent(prompt=init_prompt, settings_context=self.settings_context)
-                away_response = away_agent(prompt=home_response['answer'], settings_context=self.settings_context)
+                home_response = home_agent.forward(prompt=init_prompt, settings_context=self.settings_context)
+                away_response = away_agent.forward(prompt=home_response['answer'], settings_context=self.settings_context)
             else:
-                home_response = home_agent(prompt=away_response['answer'], settings_context=self.settings_context)
-                away_response = away_agent(prompt=home_response['answer'], settings_context=self.settings_context)
+                home_response = home_agent.forward(prompt=away_response['answer'], settings_context=self.settings_context)
+                away_response = away_agent.forward(prompt=home_response['answer'], settings_context=self.settings_context)
 
             print(f"Round {i+1}: Home agent response: {home_response['answer']}")
             print(f"Round {i+1}: Away agent response: {away_response['answer']}")
 
+########################## DSPY CLASSES ##########################
+           
 
-
-###################### DSPy CUSTOM CLASSES ############################
+######################### AGENT CHAT MODULE ########################
 class AgentChatModule(dspy.Module):
     class AgentChatSignature(dspy.Signature):
-        """Your task is to chat with another agent, following the instructions provided. You can ask questions, provide answers, or look for commonalities with data from memory retrieval. You must follow the settings/instructions given to you. Ask about things in your memory to find overlaps."""
+        """
+        Your task is to exchange information with another agent, following the instructions provided. Do not make up any information or experiences.
+        Ask your partner about information from your memory retrieval. 
+        Find commonalities and relevant things in your memory retrieval based on what your partner asks you.
+        """
         settings_context = dspy.InputField(desc="Instructions for the agent to follow during social interactions.")
         prompt = dspy.InputField()
         memory_retrieval = dspy.OutputField(desc="Retrieved memory based on the prompt.")
         answer = dspy.OutputField(desc="A response to the other agent.")
 
-    def __init__(self, db, agent_id):
+    def __init__(self, db, agent_id: str, model: dspy.OpenAI):
         self.db = db
         self.agent_id = agent_id
-
-        # Initialize language model
-        self.model = dspy.OpenAI(model="gpt-3.5-turbo", max_tokens=2000, model_type="chat", temperature=0.8)        
+        self.model = model
 
     def forward(self, prompt, settings_context):
         retrieved_memories = str(self.db.get_agent_memory(self.agent_id, prompt))
+
+        rationale_type = dspy.OutputField(
+            prefix="Reasoning: Let's think step by step in order to",
+            desc="respond casually, either drawing connections between the prompt and retrieved memory, or bringing up things from your memory if the prompt is not relevant. We ...",
+        )
+
+        max_retries = 10
+        for attempt in range(max_retries):
+            initial_response = dspy.ChainOfThought(self.AgentChatSignature, rationale_type=rationale_type)(
+                settings_context=settings_context,
+                prompt=prompt,
+                memory_retrieval=retrieved_memories
+            ).answer
+
+            try:
+                # suggestion not assetion
+                dspy.Assert(
+                    validate_relevance(prompt, initial_response, retrieved_memories),
+                    "Response must be relevant to retrieved memories.",
+                )
+                return {"answer": initial_response}
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"Attempt {attempt + 1} failed. Retrying...")
+                    continue
+                else:
+                    return {"answer": initial_response}
+
+
+########################## METRIC CHECKERS ##########################
+
+
+def validate_relevance(prompt, response, memories):
+    class ValidateRelevance(dspy.Signature):
+        """
+        Decide if the response makes sense, it should:
+        - be relevant to the prompt
+        - be relevant to the retrieved memories
+        Answer with 'Yes' if the response is relevant to the memories, otherwise answer with 'No'.
+        """
         
-        response = dspy.ChainOfThought(self.AgentChatSignature)(settings_context=settings_context, prompt=prompt, memory_retrieval=retrieved_memories).answer
-        return {"answer": response}
+        prompt = dspy.InputField(desc="Prompt to which we are responding")
+        response = dspy.InputField(desc="potential response to the prompt")
+        retrieved_memories = dspy.InputField(desc="retrieved memories")
+        answer = dspy.OutputField(desc="Yes or No")
+
+
+    rationale_type = dspy.OutputField(
+        prefix="Reasoning: Let's think step by step in order to",
+        desc="figure out if this response aligns with the conversation and our goal of making connections based on things in our memory, without making anything up. ...",
+    )
+
+    result = dspy.ChainOfThought(ValidateRelevance, rationale_type=rationale_type)(
+        prompt=prompt,
+        response=response,
+        retrieved_memories=memories
+    ).answer
+
+    return "Yes" in result
 
 ####################### USER CHAT MODULES (AND SIGS) ############################
-
 
 # Handles casual chat with the user
 class UserChatModule(dspy.Module):
@@ -146,7 +207,7 @@ class SettingsUpdateModule(dspy.Module):
         # Retrieve the old in-context prompt
         try:
             old_in_context_prompt = self.db.get_in_context_prompt(agent_id)
-            # print(f"Old in-context prompt: {old_in_context_prompt}")  # Debugging output
+            # print(f"Old in-context prompt: {old_in-context prompt}")  # Debugging output
         except Exception as e:
             print(f"Error retrieving old in-context prompt: {e}")
             return {"update_status": f"Failed: {str(e)}"}

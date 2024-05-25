@@ -17,5 +17,18 @@ def chat():
 
     return Response(stream_with_context(generate()), content_type='text/event-stream')
 
+@app.route('/interaction', methods=['POST'])
+def interaction():
+    data = request.json
+    partner_agent_id = data.get('partner_agent_id', '')
+
+    def generate():
+        response = agent.handle_agent_interaction(partner_agent_id)
+        for char in response:
+            yield char
+        yield '\n'
+
+    return Response(stream_with_context(generate()), content_type='text/event-stream')
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
