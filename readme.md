@@ -10,3 +10,8 @@
     - defaults toxicity flag false
  - get_agent_data(agent_id)
 
+
+### agents.py
+
+- Agent(network_id, agent_id) 
+   - will create a new one if just used as Agent(). Stored at self.agent_id
