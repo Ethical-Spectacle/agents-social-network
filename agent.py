@@ -1,5 +1,10 @@
 import os
 import dspy
+from datetime import datetime, timezone
+from dotenv import load_dotenv
+import weaviate
+from weaviate.exceptions import WeaviateBaseError
+from dspy.retrieve.weaviate_rm import WeaviateRM
 from dbObject import dbObject
 
 class Agent:
@@ -18,30 +23,77 @@ class Agent:
         self._setup_language_model()
         self.user_chat_module = UserChatModule()
         self.settings_update_module = SettingsUpdateModule(self.db)
+        self.settings_context = self.db.get_in_context_prompt(self.agent_id)
 
     def _setup_language_model(self):
-        self.turbo = dspy.OpenAI(model="gpt-3.5-turbo", max_tokens=2000, model_type="chat")
-        dspy.configure(lm=self.turbo)
+        self.turbo = dspy.OpenAI(model="gpt-3.5-turbo", max_tokens=2000, model_type="chat", temperature=0.8) 
+        dspy.settings.configure(lm=self.turbo)
         print("Language model configured successfully.")
 
+
+######################## USER CHAT ########################
+
     def handle_user_chat(self, message):
-        instructions = self.db.get_in_context_prompt(self.agent_id) # move this to flask endpoint later so it only happens once
-        user_response = self.user_chat_module(prompt=message, settings_context=instructions)
+        user_response = self.user_chat_module(prompt=message, settings_context=self.settings_context)
         
         if "update_command" in user_response:
             settings_suggestion = user_response["update_command"]
 
-            print(settings_suggestion)  # Debugging output
+            print(settings_suggestion)  
             try:
                 update_status = self.settings_update_module.update_in_context_prompt(agent_id=self.agent_id, changes_prompt=settings_suggestion)
                 return f"{user_response['answer']}\nMemory update status: {update_status['update_status']}"
             except Exception as e:
-                print(f"Error updating settings: {e}")  # Debugging output
+                print(f"Error updating settings: {e}") 
                 return f"Error updating settings: {str(e)}"
         else:
             return user_response["answer"]
+        
+######################### AGENTS CHAT ########################
+    def handle_agent_interaction(self, partner_agent_id):
+        home_agent = AgentChatModule(self.db, self.agent_id)
+        away_agent = AgentChatModule(self.db, partner_agent_id)
+
+        init_prompt = "Hello, how are you?"
+        # away_response = away_agent(prompt=init_prompt, settings_context=self.settings_context)
+        
+        for i in range(5):
+            if i == 0:
+                home_response = home_agent(prompt=init_prompt, settings_context=self.settings_context)
+                away_response = away_agent(prompt=home_response['answer'], settings_context=self.settings_context)
+            else:
+                home_response = home_agent(prompt=away_response['answer'], settings_context=self.settings_context)
+                away_response = away_agent(prompt=home_response['answer'], settings_context=self.settings_context)
+
+            print(f"Round {i+1}: Home agent response: {home_response['answer']}")
+            print(f"Round {i+1}: Away agent response: {away_response['answer']}")
+
+
 
 ###################### DSPy CUSTOM CLASSES ############################
+class AgentChatModule(dspy.Module):
+    class AgentChatSignature(dspy.Signature):
+        """Your task is to chat with another agent, following the instructions provided. You can ask questions, provide answers, or look for commonalities with data from memory retrieval. You must follow the settings/instructions given to you. Ask about things in your memory to find overlaps."""
+        settings_context = dspy.InputField(desc="Instructions for the agent to follow during social interactions.")
+        prompt = dspy.InputField()
+        memory_retrieval = dspy.OutputField(desc="Retrieved memory based on the prompt.")
+        answer = dspy.OutputField(desc="A response to the other agent.")
+
+    def __init__(self, db, agent_id):
+        self.db = db
+        self.agent_id = agent_id
+
+        # Initialize language model
+        self.model = dspy.OpenAI(model="gpt-3.5-turbo", max_tokens=2000, model_type="chat", temperature=0.8)        
+
+    def forward(self, prompt, settings_context):
+        retrieved_memories = str(self.db.get_agent_memory(self.agent_id, prompt))
+        
+        response = dspy.ChainOfThought(self.AgentChatSignature)(settings_context=settings_context, prompt=prompt, memory_retrieval=retrieved_memories).answer
+        return {"answer": response}
+
+####################### USER CHAT MODULES (AND SIGS) ############################
+
 
 # Handles casual chat with the user
 class UserChatModule(dspy.Module):
@@ -51,7 +103,7 @@ class UserChatModule(dspy.Module):
         prompt = dspy.InputField()
         answer = dspy.OutputField(desc="A response to the user.")
         # Optional output for updating settings
-        update_command = dspy.OutputField(desc="Command to update settings, if detected.", optional=True)
+        update_command = dspy.OutputField(desc="Command to update settings, if detected. Optional")
     
     def forward(self, prompt, settings_context):
         # Concatenate instructions with the prompt

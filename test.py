@@ -1,84 +1,37 @@
-import unittest
-from unittest.mock import patch, MagicMock
-from datetime import datetime, timezone
 import os
-import dspy
-from agent import Agent, UserChatModule, RAGModule, MemoryUpdateModule
+from agent import Agent
 from dbObject import dbObject
 
-class TestAgentSystem(unittest.TestCase):
+# Create or get a network
+db = dbObject()
+network_id = "grapevine-test"
+# db.create_network(network_id, "Grapevine Test", "Internal test network")
 
-    @patch('dbObject.weaviate.Client')
-    def setUp(self, MockClient):
-        self.mock_client = MockClient.return_value
-        self.db = dbObject()
-        self.network_id = 'test-network'
-        self.agent = Agent(network_id=self.network_id)
+# # Create two agents for interaction
+# home_agent_id = db.create_agent(network_id)
+# away_agent_id = db.create_agent(network_id)
+home_agent_id = "1"
+away_agent_id = "2"
 
-    def test_create_agent(self):
-        agent_id = self.agent.agent_id
-        self.assertIsNotNone(agent_id)
-        print(f"[TEST CREATE AGENT] Agent created successfully with ID: {agent_id}")
+# db.add_agent_data(home_agent_id, "micheal, a software engineer, is working on a new project with agents, and is looking for people to join his team.")
+# db.add_agent_data(home_agent_id, "maximus, is a tall guy who plays basketball at ASU.")
 
-    def test_update_in_context_prompt(self):
-        agent_id = self.agent.agent_id
-        new_prompt = "This is a new in-context prompt for testing."
-        self.db.update_in_context_prompt(agent_id, new_prompt)
-        print(f"[TEST UPDATE PROMPT] In-context prompt updated for agent ID: {agent_id}")
+# db.add_agent_data(away_agent_id, "jane, a data scientist in Phoenix, just graduated and is looking for a job.")
+# db.add_agent_data(away_agent_id, "mark, a man who loves to travel, is planning a trip to Europe.")
 
-        # Mock the response from the Weaviate client
-        self.mock_client.query.get.return_value.with_bm25.return_value.do.return_value = {
-            'data': {
-                'Get': {
-                    f'AgentData_{agent_id}': [
-                        {'dataContent': new_prompt, 'createdAt': datetime.now(timezone.utc).isoformat()}
-                    ]
-                }
-            }
-        }
+# Initialize the agents
+home_agent = Agent(network_id=network_id, agent_id=home_agent_id)
+away_agent = Agent(network_id=network_id, agent_id=away_agent_id)
 
-        prompt_response = self.db.get_in_context_prompt(agent_id)
-        self.assertIsNotNone(prompt_response)
-        retrieved_prompt = prompt_response['data']['Get'][f'AgentData_{agent_id}'][0]['dataContent']
-        self.assertEqual(retrieved_prompt, new_prompt)
-        print(f"[TEST UPDATE PROMPT] In-context prompt retrieved successfully: {retrieved_prompt}")
+# Function to run the test interaction
+def run_test_interaction():
+    print("Starting agent interaction test...\n")
 
-    def test_handle_user_chat_update_settings(self):
-        message = "update your settings to be more responsive."
-        with patch.object(dspy.ChainOfThought, '__call__', return_value={'output': {'answer': "Generated prompt based on new setting"}}):
-            response = self.agent.handle_user_chat(message)
-            self.assertIn("Updating settings to include: to be more responsive.", response)
-            self.assertIn("Memory update status: Success", response)
-            print(f"[TEST UPDATE SETTINGS] Response: {response}")
+    # Simulate interaction
+    home_agent.handle_agent_interaction(partner_agent_id=away_agent_id)
 
-    def test_handle_user_chat_normal_message(self):
-        message = "Hello, how are you?"
-        response = self.agent.handle_user_chat(message)
-        self.assertNotIn("update your settings", response.lower())
-        print(f"[TEST NORMAL CHAT] Response: {response}")
+    print("\nAgent interaction test completed.")
 
-    def test_add_agent_data(self):
-        agent_id = self.agent.agent_id
-        data_content = "This is a test memory entry."
-        self.db.add_agent_data(agent_id, data_content, toxicity_flag=False)
-        print(f"[TEST ADD MEMORY] Memory added for agent ID: {agent_id}")
-
-        # Mock the response from the Weaviate client
-        self.mock_client.query.get.return_value.do.return_value = {
-            'data': {
-                'Get': {
-                    f'AgentData_{agent_id}': [
-                        {'dataContent': data_content, 'createdAt': datetime.now(timezone.utc).isoformat(), 'toxicityFlag': False}
-                    ]
-                }
-            }
-        }
-
-        memory_response = self.db.get_agent_memory(agent_id)
-        self.assertIsNotNone(memory_response)
-        retrieved_memory = memory_response['data']['Get'][f'AgentData_{agent_id}'][0]['dataContent']
-        self.assertEqual(retrieved_memory, data_content)
-        print(f"[TEST ADD MEMORY] Memory entry retrieved successfully: {retrieved_memory}")
-
-if __name__ == '__main__':
-    unittest.main()
+# Run the test interaction
+if __name__ == "__main__":
+    run_test_interaction()

@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, stream_with_context, Response
 from agent import Agent
 
 app = Flask(__name__)
-agent = Agent(network_id="grapevine-test", agent_id="4")
+agent = Agent(network_id="grapevine-test", agent_id="1")
 
 @app.route('/chat', methods=['POST'])
 def chat():

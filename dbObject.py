@@ -16,7 +16,6 @@ class dbObject:
         )
         self._ensure_base_classes_exist()
 
-####################### SCHEMA ############################
     def _ensure_base_classes_exist(self):
         network_class = {
             "class": "Networks",
@@ -38,13 +37,24 @@ class dbObject:
         }
 
         try:
-            self.client.schema.create({"classes": [network_class, agent_class]})
-            print("Base classes created successfully.")
-        except WeaviateBaseError as e:
-            if "already exists" not in str(e):  # ignore "already exists" errors
-                print(f"An error occurred: {e}")
+            existing_classes = self.client.schema.get()['classes']
+            existing_class_names = [cls['class'] for cls in existing_classes]
 
-################################ NETWORKS ################################
+            if "Networks" not in existing_class_names:
+                self.client.schema.create_class(network_class)
+                print("Networks class created successfully.")
+            else:
+                print("Networks class already exists.")
+
+            if "Agents" not in existing_class_names:
+                self.client.schema.create_class(agent_class)
+                print("Agents class created successfully.")
+            else:
+                print("Agents class already exists.")
+
+        except WeaviateBaseError as e:
+            print(f"An error occurred: {e}")
+
     def create_network(self, network_id, name, description):
         network_object = {
             "networkID": network_id,
@@ -57,7 +67,6 @@ class dbObject:
         except WeaviateBaseError as e:
             print(f"An error occurred: {e}")
 
-################################ AGENTS ################################
     def create_agent(self, network_id):
         agent_id = self._get_next_agent_id()
         if agent_id is None:
@@ -71,7 +80,7 @@ class dbObject:
                 "beacon": f"weaviate://localhost/Network/{network_id}"
             },
             "createdAt": datetime.now(timezone.utc).isoformat(),
-            "inContextPrompt": f"You are an Gen Z texter. You can use abbreviations and common slang. You can ask questions, provide answers, or just chat. You should not say anything offensive, toxic, ignorant, or malicious."
+            "inContextPrompt": f"You are a Gen Z texter. You can use abbreviations and common slang. You can ask questions, provide answers, or just chat. You should not say anything offensive, toxic, ignorant, or malicious."
         }
         try:
             self.client.data_object.create(agent_object, "Agents")
@@ -83,7 +92,6 @@ class dbObject:
             print(f"An error occurred: {e}")
             return f"An error occurred: {e}"
         
-    # create agent brain
     def _create_agent_class(self, agent_id):
         agent_data_class = {
             "class": f"AgentData_{agent_id}",
@@ -91,10 +99,17 @@ class dbObject:
                 {"name": "dataContent", "dataType": ["text"]},
                 {"name": "createdAt", "dataType": ["date"]},
                 {"name": "toxicityFlag", "dataType": ["boolean"]}
-            ]
+            ],
+            "vectorizer": "text2vec-openai",
+            "moduleConfig": {
+                "text2vec-openai": {
+                    "vectorizeClassName": True,
+                    "vectorizeProperties": ["dataContent"]
+                }
+            }
         }
         try:
-            self.client.schema.create({"classes": [agent_data_class]})
+            self.client.schema.create_class(agent_data_class)
             print(f"Class for agent '{agent_id}' created successfully.")
         except WeaviateBaseError as e:
             print(f"An error occurred while creating class for agent '{agent_id}': {e}")
@@ -126,6 +141,7 @@ class dbObject:
             "createdAt": datetime.now(timezone.utc).isoformat(),
             "toxicityFlag": toxicity_flag
         }
+        print(f"Inserting data into {agent_data_class}: {agent_data_object}")  # Log the data being inserted
         try:
             self.client.data_object.create(agent_data_object, agent_data_class)
             print(f"Data for agent '{agent_id}' added successfully.")
@@ -138,24 +154,40 @@ class dbObject:
             if query_string:
                 response = self.client.query.get(agent_data_class, ["dataContent", "toxicityFlag"]) \
                     .with_bm25(query=query_string) \
+                    .with_additional("score") \
+                    .with_limit(10) \
                     .do()
             else:
                 response = self.client.query.get(agent_data_class, ["dataContent", "toxicityFlag"]).do()
-            return response
+
+            # print(f"Response: {response}")
+            
+            filtered_response = []
+            if 'data' in response and 'Get' in response['data'] and agent_data_class in response['data']['Get']:
+                for item in response['data']['Get'][agent_data_class]:
+                    if query_string:
+                        if '_additional' in item and 'score' in item['_additional']:
+                            score = float(item['_additional']['score'])
+                            if score > 0.01:
+                                filtered_response.append(item)
+                    else:
+                        filtered_response.append(item)
+            else:
+                print(f"No data found for agent '{agent_id}'.")
+
+            return filtered_response
+
         except WeaviateBaseError as e:
             print(f"An error occurred: {e}")
             return None
-
 
     def update_in_context_prompt(self, agent_id, new_prompt):
         try:
             if new_prompt is None:
                 raise ValueError("New prompt is None, cannot update in-context prompt.")
 
-            # Assert the new prompt is UTF-8 encoded
             self._assert_utf8(new_prompt)
 
-            # First, retrieve the UUID of the agent using the agentID
             response = self.client.query.get("Agents", ["_additional { id }"]) \
                 .with_where({
                     "path": ["agentID"],
@@ -170,7 +202,6 @@ class dbObject:
             
             uuid = response['data']['Get']['Agents'][0]['_additional']['id']
             
-            # Update the in-context prompt using the UUID
             self.client.data_object.update({
                 "inContextPrompt": new_prompt
             }, class_name="Agents", uuid=uuid)
@@ -196,9 +227,6 @@ class dbObject:
                 }) \
                 .do()
             
-            # Debugging output to inspect the response structure
-            # print(f"Response: {response}")
-
             if 'data' in response and 'Get' in response['data'] and 'Agents' in response['data']['Get']:
                 agents = response['data']['Get']['Agents']
                 if len(agents) > 0:
@@ -212,4 +240,3 @@ class dbObject:
         except WeaviateBaseError as e:
             print(f"An error occurred: {e}")
             return None
-
