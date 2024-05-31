@@ -92,7 +92,7 @@ class Agent:
         # toxicity check will happen here (not implemented yet)
         # home_agent.add_agent_data(partner_agent_id, interaction_summary, toxicity_flag=False):
 
-        # print(f"Chat history summary: {summary}")
+        print(f"Chat history summary: {interaction_summary}")
 
         return interaction_summary
 
@@ -136,7 +136,7 @@ class AgentChatModule(dspy.Module):
         
         # add the latest response in the chat history
         self.chat_history.append({"agent_id": self.agent_id, "prompt": prompt, "response": response["answer"]}) 
-        # print(self.chat_history)
+        print(self.chat_history)
 
         return response
 
