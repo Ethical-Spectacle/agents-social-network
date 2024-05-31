@@ -1,7 +1,10 @@
 from flask import Flask, request, jsonify, stream_with_context, Response
-from agent import Agent
+from agentObject import Agent
 
 app = Flask(__name__)
+
+# this needs to be passed in by the request but for now it's just for testing user interactions
+# to run a user chat, pyhton3 app.py, then python3 userChatDemo.py
 agent = Agent(network_id="grapevine-test", agent_id="1")
 
 @app.route('/chat', methods=['POST'])
