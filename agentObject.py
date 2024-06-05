@@ -307,14 +307,13 @@ class ChatHistorySummarizer(dspy.Module):
             desc=f"accurately summarize the chat history with very descriptive information about what was shared. I talked to {away_agent_id} about...",
         )
 
-        chat_history_str = "\n".join(
-            [
-                f"{'Me' if item['agent_id'] == home_agent_id else f'Agent {item["agent_id"]}: {item['prompt']}'}\n"
-                f"{'Me' if item['agent_id'] == home_agent_id else f'Agent {item['agent_id']}'}: {item['response']}"
-                for item in chat_history_list
-            ]
-        )
-        
+        chat_history_str = ""
+        for item in chat_history_list:
+            label = 'Me' if item['agent_id'] == home_agent_id else f'Agent {item["agent_id"]}'
+            prompt_label = f'{label}: {item["prompt"]}' if label != 'Me' else label
+            chat_history_str += f"{prompt_label}\n{label}: {item['response']}\n\n"
+
+
         response = dspy.ChainOfThought(self.ChatHistorySummarySignature, rationale_type=rationale_type)(
             chat_history=chat_history_str
         ).summary
