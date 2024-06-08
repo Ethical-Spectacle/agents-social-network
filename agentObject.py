@@ -25,6 +25,7 @@ class Agent:
         self.user_chat_module = UserChatModule()
         self.settings_update_module = SettingsUpdateModule(self.db)
         self.settings_context = self.db.get_in_context_prompt(self.agent_id)
+
         self.chat_history = []
 
     def _setup_language_model(self):
@@ -116,7 +117,7 @@ class AgentChatModule(dspy.Module):
     def __init__(self, db, agent_id: str, model: dspy.OpenAI, chat_history: list):
         self.db = db
         self.agent_id = agent_id
-        self.model = model
+        self.model = model # this isn't hooked up to anything, need to figure out how to get them to run different llms. DSPy is currently using the same config for all
         self.chat_history = chat_history # stored in the class so we can call it outside of the module
 
     # creates response (with some guidance from relevance check)
