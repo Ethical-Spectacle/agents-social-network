@@ -2,7 +2,7 @@
 colab_dbObject.py
 assertion.log
 azure_openai_usage.log
-openao_usage.log
+openai_usage.log
 /venv
 /local_cache
 /__pycache__
