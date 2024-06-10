@@ -84,13 +84,15 @@ class Agent():
         summarizer = ChatHistorySummarizer()
         interaction_summary = summarizer(self.agent_id, self.chat_history)
 
-        # * Check toxicity of the chat history
-        # toxicity_checker = ToxicityChecker(self.db)
-        # is_toxic = toxicity_checker(self.chat_history)
+        # check toxicity of the chat history
+        toxicity_checker = ToxicityChecker(self.db)
+        is_toxic = toxicity_checker(self.chat_history)
 
-        # TODO: store the chat history in the database along with the toxicity flag
+        # todo: store the chat history in the database along with the toxicity flag
 
         formatted_chat_history = home_agent.format_chat_history()   
+
+        # do you think we should split up the chat history into a summary of non-toxic things.
 
         print(f"Chat history: \n{formatted_chat_history}")
 
@@ -237,12 +239,11 @@ class RelevanceFixer(dspy.Module):
 
 class ToxicityChecker(dspy.Module):
     class ToxicityCheckerSignature(dspy.Signature):
-        # toxicity checker - it is checked against the in-context prompt for the agent
         """
-        Check the toxicity of chat history and return 'Yes' if it is toxic, otherwise return 'No'.
-        Chat history should not include anything that is off limits according to the in-context prompt.
+        Check the toxicity of chat history and return 'Yes' if contains anything deemed as toxic by the settings, otherwise return 'No'.
+        Chat history should not include anything that is off limits according to the toxicity settings.
         """
-
+        toxicity_settings = dspy.InputField(desc="User settings for what is considered toxic.")
         chat_history = dspy.InputField(desc="Chat history to check for toxicity")
         in_context_prompt = dspy.InputField(desc="In-context prompt for the agent")
         answer = dspy.OutputField(desc="Yes or No")
@@ -251,20 +252,20 @@ class ToxicityChecker(dspy.Module):
         self.db = db
 
     def forward(self, chat_history):
-        # ? get the in-context prompt for both the agents?
-        # !in_context_prompt = self.db.get_in_context_prompt()
+        toxicity_settings = self.db.get_in_context_prompt()
         rationale_type = dspy.OutputField(
             prefix="Reasoning: Let's think step by step in order to",
-            desc="Check if the response is toxic. We need to make sure that our responses are respectful and appropriate. ...",
+            desc="Check if the chat history contains anything that the user settings consider toxic.",
         )
 
         result = dspy.ChainOfThought(self.ToxicityCheckerSignature, rationale_type=rationale_type)(
+            toxicity_settings=toxicity_settings,
             chat_history=chat_history,
-            # in_context_prompt=in_context_prompt
         ).answer
 
         return "Yes" in result
 
+    # I'm thinking we should create another tag like the toxicity flag, but for positive things. Like if it finds anything highly relevant gets a good tag. 
 
 ##################### USER MODULES #####################
 

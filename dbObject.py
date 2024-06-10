@@ -61,11 +61,8 @@ class dbObject:
             print(f"An error occurred: {e}")
 
     # *** Network methods ***
-    # ? Do we need to autogenerate unique network IDs?
+    # ? Do we need to autogenerate unique network IDs?  max: yeah we should
     def create_network(self, network_id, name, description):
-        """
-        Create a network in the database. 
-        """
         network = {
             "networkID": network_id,
             "name": name,
@@ -79,9 +76,6 @@ class dbObject:
             print(f"An error occurred: {e}")
 
     def get_network(self, network_name) -> str:
-        """
-        Get a network from the database by name. Returns the network ID.
-        """
         try:
             response = self.client.query.get("Networks", ["networkID", "name", "description"]) \
                 .with_where({
@@ -111,9 +105,6 @@ class dbObject:
     # *** Agent methods ***
     # create an agent
     def create_agent(self, network_name) -> str:
-        """
-        Create an agent within a network given the network name. Returns the agent ID.
-        """
         agent_id = self._get_next_agent_id()
         print(f"Creating agent with ID: {agent_id}")
         network_id = self.get_network(network_name)
@@ -143,9 +134,6 @@ class dbObject:
     
     # add data to an agent
     def add_agent_data(self, agent_id: str, data_content, toxicity_flag=False):
-        """
-        Add data to an agent in the database. This is the information that the agent will store.
-        """
         agent_data_class = f"AgentData_{agent_id}"
         agent_data_object = {
             "dataContent": data_content,
@@ -198,7 +186,6 @@ class dbObject:
     # get the in-context prompt for an agent
     def get_in_context_prompt(self, agent_id: str):
         try:
-
             response = self.client.query.get("Agents", ["inContextPrompt"]) \
                 .with_where({
                     "path": ["agentID"],
@@ -262,9 +249,6 @@ class dbObject:
 
     # *** Private methods *** 
     def _create_agent_class(self, agent_id):
-        """
-        Create a class (memory) for an agent in the database. 
-        """
         agent_data_class = {
             "class": f"AgentData_{agent_id}",
             "properties": [
@@ -289,8 +273,6 @@ class dbObject:
             print(f"An error occurred while creating class for agent '{agent_id}': {e}")
         
     def _get_next_agent_id(self):
-        """
-        Get the next available agent ID."""
         try:
             # graphql query to get the count of agents
             query = """
