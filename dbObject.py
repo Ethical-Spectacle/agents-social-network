@@ -4,13 +4,17 @@ from dotenv import load_dotenv
 import weaviate
 from weaviate.exceptions import WeaviateBaseError
 
+load_dotenv()
+
 # This class is the main interface to the Weaviate database. It handles all interactions with the database.
 class dbObject:
     def __init__(self):
         load_dotenv()
         self.client = weaviate.Client(
-            url=os.getenv("WCS_URL"),
-            auth_client_secret=weaviate.auth.AuthApiKey(os.getenv("WCS_API_KEY")),
+            # url=os.getenv("WCS_URL"),
+            url="https://sadie-testing-1gvym50h.weaviate.network",
+            # auth_client_secret=weaviate.auth.AuthApiKey(os.getenv("WCS_API_KEY")),
+            auth_client_secret=weaviate.auth.AuthApiKey("f5DDSaPVKpCfnvDlDENLC8nQit3h3DpsfGkG"),
             additional_headers={
                 "X-OpenAI-Api-Key": os.getenv("OPENAI_API_KEY")
             }
@@ -36,7 +40,8 @@ class dbObject:
                 {"name": "agentID", "dataType": ["string"]},
                 {"name": "network", "dataType": ["Network"]},
                 {"name": "createdAt", "dataType": ["date"]},
-                {"name": "inContextPrompt", "dataType": ["text"]}
+                {"name": "instructions", "dataType": ["text"]},
+                {"name": "toxicitySettings", "dataType": ["text"]}
             ]
         }
 
@@ -61,7 +66,7 @@ class dbObject:
             print(f"An error occurred: {e}")
 
     # *** Network methods ***
-    # ? Do we need to autogenerate unique network IDs?  max: yeah we should
+    # ? Do we need to autogenerate unique network IDs?  max: yeah we should figure something out, maybe throw error if they use a take network id
     def create_network(self, network_id, name, description):
         network = {
             "networkID": network_id,
@@ -104,10 +109,9 @@ class dbObject:
         
     # *** Agent methods ***
     # create an agent
-    def create_agent(self, network_name) -> str:
+    def create_agent(self, network_id) -> str:
         agent_id = self._get_next_agent_id()
         print(f"Creating agent with ID: {agent_id}")
-        network_id = self.get_network(network_name)
 
         agent_object = {
             "agentID": str(agent_id),
@@ -116,7 +120,8 @@ class dbObject:
             },
             "createdAt": datetime.now(timezone.utc).isoformat(),
             # This is basically the prompt that the agent will use to generate responses. This can be edited by the user later on. 
-            "inContextPrompt": f"You are a Gen Z texter. You can use abbreviations and common slang. You can ask questions, provide answers, or just chat. You should not say anything offensive, toxic, ignorant, or malicious."
+            "instructions": f"You are a Gen Z texter. You can use abbreviations and common slang. You can ask questions, provide answers, or just chat. You should not say anything offensive, toxic, ignorant, or malicious.",
+            "toxicitySettings": "You are moderate and not overly sensitive, yet do not tolerate any form of hate speech, racism, or discrimination. You are open to learning and growing."
         }
 
         try:
@@ -154,39 +159,47 @@ class dbObject:
         try:
             if query_string:
                 # query based on dataContent relevancy to the query string
-                response = self.client.query.get(agent_data_class, ["dataContent", "toxicityFlag"]) \
-                    .with_bm25(query=query_string) \
-                    .with_additional("score") \
-                    .with_limit(10) \
-                    .do()
+                response = self.client.query.get(agent_data_class, ["dataContent", "toxicityFlag"]).do() # \
+                    # .with_bm25(query=query_string) \
+                    # .with_additional("score") \
+                    # .do()
+                    # # .with_limit(10) \
             else:
                 # returns all memories for the agent if no query string is provided
                 response = self.client.query.get(agent_data_class, ["dataContent", "toxicityFlag"]).do()
+
+            # print(response)
 
             # * parse memories and only keep one's over our relevancy threshold
             filtered_response = []
             if 'data' in response and 'Get' in response['data'] and agent_data_class in response['data']['Get']:
                 for item in response['data']['Get'][agent_data_class]:
-                    if query_string:
-                        if '_additional' in item and 'score' in item['_additional']:
-                            score = float(item['_additional']['score'])
-                            if score > 0.01: # TODO: set threshold here (0.01 is just for testing, i'm thinking we'll use like 0.5 or 0.6)
-                                # TODO: add another if check here for the toxicity flag (however we decide to interpret that)
-                                filtered_response.append(item)
-                    else:
-                        filtered_response.append(item)
+                    # if query_string:
+                    #     if '_additional' in item and 'score' in item['_additional']:
+                    #         score = float(item['_additional']['score'])
+                    #         if score > 0.00: # TODO: set threshold here (0.01 is just for testing, i'm thinking we'll use like 0.5 or 0.6)
+                    #             # if item['toxicityFlag'] == False: # strict. we could set it to be loose or even avoid it in conversation
+                    #             filtered_response.append(item)
+                    # else:
+                    filtered_response.append(item)
             else:
                 print(f"No data found for agent '{agent_id}'.")
+            
+            # print(filtered_response)
+
+            # print(f"Memory retrieval for agent '{agent_id}' successful. {filtered_response}")
             return filtered_response
 
         except WeaviateBaseError as e:
             print(f"An error occurred: {e}")
             return None
     
-    # get the in-context prompt for an agent
-    def get_in_context_prompt(self, agent_id: str):
+############################ INSTRUCTIONS #######################################
+
+    # get the instructions prompt for an agent
+    def get_instructions(self, agent_id):
         try:
-            response = self.client.query.get("Agents", ["inContextPrompt"]) \
+            response = self.client.query.get("Agents", ["instructions"]) \
                 .with_where({
                     "path": ["agentID"],
                     "operator": "Equal",
@@ -197,7 +210,7 @@ class dbObject:
             if 'data' in response and 'Get' in response['data'] and 'Agents' in response['data']['Get']:
                 agents = response['data']['Get']['Agents']
                 if len(agents) > 0:
-                    return agents[0]['inContextPrompt']
+                    return agents[0]['instructions']
                 else:
                     print("No agents found with the provided agentID.")
                     return None
@@ -210,11 +223,11 @@ class dbObject:
             print(f"An error occurred: {e}")
             return None
 
-    # update the in-context prompt for an agent
-    def update_in_context_prompt(self, agent_id: str, new_prompt):
+    # update the context prompt for an agent
+    def update_instructions(self, agent_id, new_instructions):
         try:
-            if new_prompt is None:
-                raise ValueError("New prompt is None, cannot update in-context prompt.")
+            if new_instructions is None:
+                raise ValueError("New instructions is None, cannot update instructions prompt.")
 
             # get uuid of agent to update
             response = self.client.query.get("Agents", ["_additional { id }"]) \
@@ -231,14 +244,79 @@ class dbObject:
             
             uuid = response['data']['Get']['Agents'][0]['_additional']['id']
             
-            # update the in-context prompt
+            # update the instructions prompt
             self.client.data_object.update({
-                "inContextPrompt": new_prompt
+                "instructions": new_instructions
             }, class_name="Agents", uuid=uuid)
 
-            print(f"In-context prompt for agent '{agent_id}' updated successfully.")
-            # return the in-context prompt
-            return new_prompt
+            print(f"Instructions prompt for agent '{agent_id}' updated successfully.")
+            # return the instructions prompt
+            return new_instructions
+
+        except ValueError as e:
+            print(f"Validation error: {e}")
+
+        except WeaviateBaseError as e:
+            print(f"An error occurred: {e}")
+
+############################ TOXICITY SETTINGS #######################################
+            
+    # get the instructions prompt for an agent
+    def get_toxicty_settings(self, agent_id):
+        try:
+            response = self.client.query.get("Agents", ["toxicitySettings"]) \
+                .with_where({
+                    "path": ["agentID"],
+                    "operator": "Equal",
+                    "valueString": agent_id
+                }) \
+                .do()
+            
+            if 'data' in response and 'Get' in response['data'] and 'Agents' in response['data']['Get']:
+                agents = response['data']['Get']['Agents']
+                if len(agents) > 0:
+                    return agents[0]['toxicitySettings']
+                else:
+                    print("No agents found with the provided agentID.")
+                    return None
+                
+            else:
+                print("Unexpected response structure.")
+                return None
+            
+        except WeaviateBaseError as e:
+            print(f"An error occurred: {e}")
+            return None
+
+    # update the context prompt for an agent
+    def update_toxicity_settings(self, agent_id, new_toxicity_settings):
+        try:
+            if new_toxicity_settings is None:
+                raise ValueError("New toxicity settings is None, cannot update toxicity settings.")
+
+            # get uuid of agent to update
+            response = self.client.query.get("Agents", ["_additional { id }"]) \
+                .with_where({
+                    "path": ["agentID"],
+                    "operator": "Equal",
+                    "valueString": agent_id
+                }) \
+                .do()
+            
+            if not response['data']['Get']['Agents']:
+                print(f"No agent found with agentID '{agent_id}'")
+                return
+            
+            uuid = response['data']['Get']['Agents'][0]['_additional']['id']
+            
+            # update the instructions prompt
+            self.client.data_object.update({
+                "toxicitySettings": new_toxicity_settings
+            }, class_name="Agents", uuid=uuid)
+
+            print(f"Toxicity settings for agent '{agent_id}' updated successfully.")
+            
+            return new_toxicity_settings
 
         except ValueError as e:
             print(f"Validation error: {e}")
