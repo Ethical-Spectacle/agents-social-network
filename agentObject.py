@@ -22,7 +22,7 @@ class Agent():
         self.chat_history = []
 
     def _setup_language_model(self):
-        self.turbo = dspy.OpenAI(model="gpt-3.5-turbo", max_tokens=2000, model_type="chat", temperature=0.8) 
+        self.turbo = dspy.OpenAI(model="gpt-3.5-turbo", max_tokens=2000, model_type="chat", temperature=0.8)
         dspy.settings.configure(lm=self.turbo)
         print("Language model configured successfully.")
 
@@ -72,6 +72,7 @@ class Agent():
 
             # maybe we add a DSPy module for deciding if the conversation should continue or not 
             # we should use llms for these types of decisions to demonstrate the extent of the capabilities
+                
         # summarize chat history (to store in memory)
             # memory retrevial in chats needs to be designed to interpret the format of the summary correctly. (think about how it will be used in the prompt)
             # then we can do things like store the memories with "On Monday, May 31, 2024, I talked to Agent 2 about..."
@@ -94,8 +95,8 @@ class Agent():
 
         return interaction_summary
 
-
 ########################## DSPY CLASSES ##########################
+
 
 ##################### AGENT CHAT MODULES #####################
 class AgentChatModule(dspy.Module):

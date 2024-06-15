@@ -24,6 +24,7 @@ class dbObject:
 
         self._ensure_base_classes_exist()
 
+
     def _ensure_base_classes_exist(self):
         network_class = {
             "class": "Networks",
@@ -45,7 +46,7 @@ class dbObject:
             ]
         }
 
-         # if the database hasn't been setup it will create those classes
+        # if the database hasn't been setup it will create those classes
         try:
             existing_classes = self.client.schema.get()['classes']
             existing_class_names = [cls['class'] for cls in existing_classes]
