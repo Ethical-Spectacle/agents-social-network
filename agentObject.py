@@ -167,7 +167,8 @@ class RelevanceFixer(dspy.Module):
         answer = dspy.OutputField(desc="A response to the prompt.")
 
     # i wonder if we should be passing a model object into the init so that we remain consistent with the correct agent logic happening with the correct agent's model
-
+    def _init_(self, model):
+        self.model = model
     # makes sure that a response is relevant to the prompt and the retrieved memories, this is like our halucination fixer
     # it uses a checker module in this flow to decide if it needs to retry
     def forward(self, prompt, instructions, retrieved_memories, max_retries):
