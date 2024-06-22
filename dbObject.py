@@ -11,10 +11,10 @@ class dbObject:
     def __init__(self):
         load_dotenv()
         self.client = weaviate.Client(
-            # url=os.getenv("WCS_URL"),
-            url="https://sadie-testing-1gvym50h.weaviate.network",
-            # auth_client_secret=weaviate.auth.AuthApiKey(os.getenv("WCS_API_KEY")),
-            auth_client_secret=weaviate.auth.AuthApiKey("f5DDSaPVKpCfnvDlDENLC8nQit3h3DpsfGkG"),
+            url=os.getenv("WCS_URL"),
+            # url="https://sadie-testing-1gvym50h.weaviate.network",
+            auth_client_secret=weaviate.auth.AuthApiKey(os.getenv("WCS_API_KEY")),
+            # auth_client_secret=weaviate.auth.AuthApiKey("f5DDSaPVKpCfnvDlDENLC8nQit3h3DpsfGkG"),
             additional_headers={
                 "X-OpenAI-Api-Key": os.getenv("OPENAI_API_KEY")
             }
