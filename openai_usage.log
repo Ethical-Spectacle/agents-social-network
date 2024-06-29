@@ -770,3 +770,62 @@ HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
 HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
 HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
 HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+SuggestionFailed: Your response should be more relevant to the memories or previous chat message.
+SuggestionFailed: Your response should be more relevant to the memories or previous chat message.
+SuggestionFailed: Your response should be more relevant to the memories or previous chat message.
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+SuggestionFailed: Your response should be more relevant to the memories or previous chat message.
+SuggestionFailed: Your response should be more relevant to the memories or previous chat message.
+SuggestionFailed: Your response should be more relevant to the memories or previous chat message.
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+SuggestionFailed: Your response should be more relevant to the memories or previous chat message.
+SuggestionFailed: Your response should be more relevant to the memories or previous chat message.
+SuggestionFailed: Your response should be more relevant to the memories or previous chat message.
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+SuggestionFailed: Your response should be more relevant to the memories or previous chat message.
+SuggestionFailed: Your response should be more relevant to the memories or previous chat message.
+SuggestionFailed: Your response should be more relevant to the memories or previous chat message.
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+📋 Ensuring phoenix working directory: /Users/maximuspowers/.phoenix
+Dataset: phoenix_dataset_bf56d71f-55de-40b1-b479-9c5fd5a3da90 initialized
+📋 Ensuring phoenix working directory: /Users/maximuspowers/.phoenix
+Dataset: phoenix_dataset_f9c87f50-054a-445e-a7f4-0cae7fb42a5c initialized
+📋 Ensuring phoenix working directory: /Users/maximuspowers/.phoenix
+Dataset: phoenix_dataset_4f1d1005-630a-443e-a92c-20941c35bd0a initialized
+📋 Ensuring phoenix working directory: /Users/maximuspowers/.phoenix
+📋 Ensuring phoenix working directory: /Users/maximuspowers/.phoenix
+Dataset: phoenix_dataset_b497f4f8-0b6b-475b-bb12-259102e69733 initialized
+📋 Ensuring phoenix working directory: /Users/maximuspowers/.phoenix
+Dataset: phoenix_dataset_f1e41b2a-d286-437c-b101-7e72941b9fd6 initialized
+📋 Ensuring phoenix working directory: /Users/maximuspowers/.phoenix
+Dataset: phoenix_dataset_c9339343-f788-4ce6-9442-ff25d2409ab6 initialized
+📋 Ensuring phoenix working directory: /Users/maximuspowers/.phoenix
+Dataset: phoenix_dataset_8472e873-9d0e-4343-a93d-c870123d6eab initialized
+📋 Ensuring phoenix working directory: /Users/maximuspowers/.phoenix
+Dataset: phoenix_dataset_09c8486d-841f-4fa7-9a7f-962856ea9826 initialized
+📋 Ensuring phoenix working directory: /Users/maximuspowers/.phoenix
+📋 Ensuring phoenix working directory: /Users/maximuspowers/.phoenix
+Dataset: phoenix_dataset_b6c4a721-5a00-4914-b1f9-12d1ecadbc6c initialized
+📋 Ensuring phoenix working directory: /Users/maximuspowers/.phoenix
+📋 Ensuring phoenix working directory: /Users/maximuspowers/.phoenix
+Dataset: phoenix_dataset_c85b87cd-ff8d-4deb-b75d-c83002d6a928 initialized
+📋 Ensuring phoenix working directory: /Users/maximuspowers/.phoenix

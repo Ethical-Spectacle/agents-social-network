@@ -8,7 +8,8 @@ CORS(app)
 
 # this needs to be passed in by the request but for now it's just for testing user interactions
 # to run a user chat, pyhton3 app.py, then python3 userChatDemo.py
-agent = Agent(network_id="grapevine-test", agent_id="1")
+db = dbObject()
+agent = Agent(network_id="grapevine-test", agent_id="6", db=db)
 
 @app.route('/')
 def index():

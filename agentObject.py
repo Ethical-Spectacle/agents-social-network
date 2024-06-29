@@ -3,6 +3,7 @@ import dspy
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from dbObject import dbObject
+from phoenixUI import launch_ui
 
 from dspy.primitives.assertions import assert_transform_module, backtrack_handler
 from dspy import Suggest
@@ -24,6 +25,7 @@ class Agent():
         self.user_chat_module = UserChatModule()
         self.instructions = self.db.get_instructions(self.agent_id)
         self.chat_history = []
+        launch_ui()
 
     def _setup_language_model(self):
         self.turbo = dspy.OpenAI(model="gpt-3.5-turbo", max_tokens=2000, model_type="chat", temperature=0.8)

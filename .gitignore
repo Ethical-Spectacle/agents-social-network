@@ -7,3 +7,4 @@ openai_usage.log
 /local_cache
 /__pycache__
 openai_usage.log
+__pycache__
