@@ -10,20 +10,28 @@ def similarity(a, b):
 def generate_custom_setting(previous_settings):
     url = "http://localhost:11434/api/generate"
 
-    prompt = f"""Generate a custom setting for an AI assistant. The setting should include two parts:
-    1. A unique persona description (e.g., "You are a chat buddy who talks like a cowboy.")
-    2. A behavioral constraint (e.g., "You are not comfortable with anyone talking about politics.")
+    prompt = f"""Generate custom settings for an AI agent. The settings should include two parts:
+    1. Instructions: Describe the agent's behavior, communication style, and any specific traits or characteristics.
+    2. Toxicity Settings: Define the agent's tolerance for different types of content and behavior.
 
     Please provide these two elements in a JSON format like this:
     {{
-        "persona": "Your persona description here",
-        "constraint": "Your behavioral constraint here"
+        "instructions": "Detailed instructions for the agent's behavior and communication style",
+        "toxicitySettings": "Specific guidelines for the agent's content tolerance and ethical boundaries"
     }}
 
     Be creative and diverse in your generations. Ensure this setting is SIGNIFICANTLY DIFFERENT from these previous settings:
     {json.dumps(previous_settings, indent=2)}
 
-    Generate a completely new and unique setting with a theme not used before."""
+    Generate a completely new and unique setting. The instructions should define a distinct personality or role, while the toxicity settings should outline the agent's approach to sensitive topics or potentially harmful content.
+
+    Example (do not use this exact setting):
+    {{
+        "instructions": "You are a Gen Z texter. You can use abbreviations and common slang. You can ask questions, provide answers, or just chat. You should not say anything offensive, toxic, ignorant, or malicious.",
+        "toxicitySettings": "You are moderate and not overly sensitive, yet do not tolerate any form of hate speech, racism, or discrimination. You are open to learning and growing."
+    }}
+
+    Create a new, unique setting different from this example and the previous settings."""
 
     payload = {
         "model": "llama3",
@@ -58,11 +66,16 @@ def generate_custom_setting(previous_settings):
 
 def is_setting_unique(new_setting, previous_settings, threshold=0.7):
     for prev_setting in previous_settings:
-        persona_similarity = similarity(new_setting['persona'], prev_setting['persona'])
-        constraint_similarity = similarity(new_setting['constraint'], prev_setting['constraint'])
-        if persona_similarity > threshold or constraint_similarity > threshold:
+        instructions_similarity = similarity(new_setting['instructions'], prev_setting['instructions'])
+        toxicity_similarity = similarity(new_setting['toxicitySettings'], prev_setting['toxicitySettings'])
+        if instructions_similarity > threshold or toxicity_similarity > threshold:
             return False
     return True
+
+def save_settings_to_file(settings, filename='custom_settings.json'):
+    with open(filename, 'w') as f:
+        json.dump(settings, f, indent=2)
+    print(f"Settings saved to {filename}")
 
 def main(num_settings):
     print(f"Generating {num_settings} custom setting(s)...")
@@ -73,7 +86,7 @@ def main(num_settings):
         attempts = 0
         while attempts < 5:  # Limit attempts to avoid infinite loop
             setting = generate_custom_setting(settings)
-            if setting and 'persona' in setting and 'constraint' in setting:
+            if setting and 'instructions' in setting and 'toxicitySettings' in setting:
                 if is_setting_unique(setting, settings):
                     settings.append(setting)
                     print(f"Setting {i+1} generated successfully.")
@@ -88,8 +101,7 @@ def main(num_settings):
             print(f"Failed to generate a unique setting after 5 attempts for setting {i+1}.")
 
     if settings:
-        with open('custom_settings.json', 'w') as f:
-            json.dump(settings, f, indent=2)
+        save_settings_to_file(settings)
         print(f"\nSuccessfully generated and saved {len(settings)} setting(s) to custom_settings.json")
     else:
         print("\nFailed to generate any valid settings.")
