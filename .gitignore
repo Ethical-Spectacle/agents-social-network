@@ -8,3 +8,4 @@ openai_usage.log
 /__pycache__
 openai_usage.log
 __pycache__
+.DS_Store
