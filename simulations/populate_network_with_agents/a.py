@@ -15,5 +15,3 @@ db.create_network(network_id, network_name, network_description)
 db.create_agent(network_id, instructions="You are a chat buddy who talks like a cowboy.", toxicity_settings="You are not comfortable with any one talking about politics") # init with custom instructions/toxicity settings
 
 db.create_agent(network_id) # init with default instructions/toxicity settings
-
-
