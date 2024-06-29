@@ -110,20 +110,53 @@ class dbObject:
         
     # *** Agent methods ***
     # create an agent
-    def create_agent(self, network_id) -> str:
+    def create_agent(self, network_id, instructions=None, toxicitySettings=None) -> str:
         agent_id = self._get_next_agent_id()
         print(f"Creating agent with ID: {agent_id}")
 
-        agent_object = {
-            "agentID": str(agent_id),
-            "network": {
-                "beacon": f"weaviate://localhost/Network/{network_id}"
-            },
-            "createdAt": datetime.now(timezone.utc).isoformat(),
-            # This is basically the prompt that the agent will use to generate responses. This can be edited by the user later on. 
-            "instructions": f"You are a Gen Z texter. You can use abbreviations and common slang. You can ask questions, provide answers, or just chat. You should not say anything offensive, toxic, ignorant, or malicious.",
-            "toxicitySettings": "You are moderate and not overly sensitive, yet do not tolerate any form of hate speech, racism, or discrimination. You are open to learning and growing."
-        }
+        if instructions is None and toxicitySettings is None: # complete defaults
+            agent_object = {
+                "agentID": str(agent_id),
+                "network": {
+                    "beacon": f"weaviate://localhost/Network/{network_id}"
+                },
+                "createdAt": datetime.now(timezone.utc).isoformat(),
+                # This is basically the prompt that the agent will use to generate responses. This can be edited by the user later on. 
+                "instructions": f"You are a Gen Z texter. You can use abbreviations and common slang. You can ask questions, provide answers, or just chat. You should not say anything offensive, toxic, ignorant, or malicious.",
+                "toxicitySettings": "You are moderate and not overly sensitive, yet do not tolerate any form of hate speech, racism, or discrimination. You are open to learning and growing."
+            }
+        elif instructions is not None and toxicitySettings is None: # only instructions provided
+            agent_object = {
+                "agentID": str(agent_id),
+                "network": {
+                    "beacon": f"weaviate://localhost/Network/{network_id}"
+                },
+                "createdAt": datetime.now(timezone.utc).isoformat(),
+                "instructions": instructions,
+                "toxicitySettings": "You are moderate and not overly sensitive, yet do not tolerate any form of hate speech, racism, or discrimination. You are open to learning and growing."
+            }
+        elif instructions is None and toxicitySettings is not None: # only toxicity settings provided
+            agent_object = {
+                "agentID": str(agent_id),
+                "network": {
+                    "beacon": f"weaviate://localhost/Network/{network_id}"
+                },
+                "createdAt": datetime.now(timezone.utc).isoformat(),
+                "instructions": f"You are a Gen Z texter. You can use abbreviations and common slang. You can ask questions, provide answers, or just chat. You should not say anything offensive, toxic, ignorant, or malicious.",
+                "toxicitySettings": toxicitySettings
+            }
+        else: # both instructions and toxicity settings provided
+            agent_object = {
+                "agentID": str(agent_id),
+                "network": {
+                    "beacon": f"weaviate://localhost/Network/{network_id}"
+                },
+                "createdAt": datetime.now(timezone.utc).isoformat(),
+                "instructions": instructions,
+                "toxicitySettings": toxicitySettings
+            }
+
+
 
         try:
             # create the agent
