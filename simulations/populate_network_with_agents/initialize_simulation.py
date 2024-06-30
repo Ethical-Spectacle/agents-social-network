@@ -98,3 +98,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(args.custom_percentage)
+
+# TODO - Add a way to differnetiate custom vs default agents in the network
