@@ -1,13 +1,17 @@
 import os
 from agentObject import Agent
 from dbObject import dbObject
+from dotenv import load_dotenv
+
+# load env variables
+load_dotenv()
 
 # create or get a network
 db = dbObject()
 network_id = "grapevine-test"
-db.create_network(network_id, "Grapevine Test", "Internal test network")
+# db.create_network(network_id, "Grapevine Test", "Internal test network")
 
-# create two agents
+# # create two agents
 # home_agent_id = db.create_agent("grapevine-test")
 # away_agent_id = db.create_agent("grapevine-test")
 
