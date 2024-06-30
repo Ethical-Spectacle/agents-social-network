@@ -11,10 +11,10 @@ class dbObject:
     def __init__(self):
         load_dotenv()
         self.client = weaviate.Client(
-            url=os.getenv("WCS_URL"),
-            # url="https://sadie-testing-1gvym50h.weaviate.network",
-            auth_client_secret=weaviate.auth.AuthApiKey(os.getenv("WCS_API_KEY")),
-            # auth_client_secret=weaviate.auth.AuthApiKey("f5DDSaPVKpCfnvDlDENLC8nQit3h3DpsfGkG"),
+            # url=os.getenv("WCS_URL"),
+            url="https://sadie-testing-jzq2se3h.weaviate.network",
+            # auth_client_secret=weaviate.auth.AuthApiKey(os.getenv("WCS_API_KEY")),
+            auth_client_secret=weaviate.auth.AuthApiKey("Bp3Y97srB6oaueYODD8rze29o923WxTfdLXw"),
             additional_headers={
                 "X-OpenAI-Api-Key": os.getenv("OPENAI_API_KEY")
             }
@@ -139,12 +139,13 @@ class dbObject:
             return None
     
     # add data to an agent
-    def add_agent_data(self, agent_id: str, data_content, toxicity_flag=False):
+    def add_agent_data(self, agent_id: str, data_content, toxicity_flag=False, interest_metric=0.0):
         agent_data_class = f"AgentData_{agent_id}"
         agent_data_object = {
             "dataContent": data_content,
             "createdAt": datetime.now(timezone.utc).isoformat(),
-            "toxicityFlag": toxicity_flag
+            "toxicityFlag": toxicity_flag,
+            "interestMetric": interest_metric
         }
         print(f"Inserting data into {agent_data_class}: {agent_data_object}")
 
