@@ -3,7 +3,6 @@ import dspy
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from dbObject import dbObject
-from phoenixUI import launch_ui
 
 from dspy.primitives.assertions import assert_transform_module, backtrack_handler
 from dspy import Suggest
@@ -11,26 +10,38 @@ from dspy import Suggest
 
 class Agent():
     def __init__(self, network_id: str, agent_id=None, db: dbObject=None):
-        if db is None:
-            raise ValueError("Database object cannot be None.")
+        # ensure all required stuff is passed in
+        if db is None: raise ValueError("Database object cannot be None.")
         self.db = db
+        if network_id is None: raise ValueError("Network ID cannot be None.")
         self.network_id = network_id
-
-        if network_id is None:
-            raise ValueError("Network ID cannot be None.")
-
+        if agent_id is None: raise ValueError("Agent ID cannot be None.")
         self.agent_id = agent_id
         
-        self._setup_language_model()
-        self.user_chat_module = UserChatModule()
-        self.instructions = self.db.get_instructions(self.agent_id)
-        self.chat_history = []
-        launch_ui()
-
-    def _setup_language_model(self):
+        # config dspy model to use, eventually we should just pass this in
         self.turbo = dspy.OpenAI(model="gpt-3.5-turbo", max_tokens=2000, model_type="chat", temperature=0.8)
         dspy.settings.configure(lm=self.turbo, trace=[])
-        print("Language model configured successfully.")
+        
+        # self.user_chat_module = UserChatModule()
+        # load user's settings from db. It's faster to do it here, but they can't be updated mid conversation (for example in a user interaction, aka problem for later)
+        self.instructions = self.db.get_instructions(self.agent_id)
+        self.toxicity_settings = self.db.get_toxicty_settings(self.agent_id)
+        self.chat_history = []
+
+        # helper modules
+        self.interaction_expectation = InteractionLengthExpectation()
+        self.chat_summarizer = ChatHistorySummarizer()
+
+        # metrics
+        self.toxicity_metric = ToxicityMetric(self.db)
+        self.toxicity_threshold = 6 # 1-very toxic, 10-not toxic, flags memory as toxic if below this
+        self.interest_metric = ConversationMetric()
+        self.interest_threshold = 6 # 1-not interested, 10-very interested, gets added to metadata of memory
+        
+        # agent chat module (and activate suggestions)
+        self.agent_chat_module = AgentChatModule(self.db, self.agent_id, relevance_threshold=7) # set the relevance threshold, it retries if it's below this
+        self.agent_chat_module = assert_transform_module(self.agent_chat_module, backtrack_handler)
+
 
 ######################## USER CHAT ########################
 
@@ -50,36 +61,33 @@ class Agent():
 
         # init DSPy chat modules
         # we should init models here and pass them into these modules (use "with dspy.context" inside modules to select model)
-        home_agent = assert_transform_module(AgentChatModule(self.db, self.agent_id), backtrack_handler) # active suggestions (used in relevance check)
-        away_agent = assert_transform_module(AgentChatModule(self.db, away_agent_id), backtrack_handler) # active suggestions (used in relevance check)
+        home_agent = self.agent_chat_module
+        away_agent = assert_transform_module(AgentChatModule(self.db, away_agent_id), backtrack_handler)
 
         # predict number of interactions
-        interaction_expectation = InteractionLengthExpectation()
-        expected_interactions  = interaction_expectation(environment)
+        expected_interactions  = self.interaction_expectation(environment)
 
         # run interactions (recursive extension logic built in)
-        interest_metric = self._run_interactions(home_agent, away_agent, init_prompt, expected_interactions)
+        interest_metric_output = self._run_interactions(home_agent, away_agent, init_prompt, expected_interactions)
 
         formatted_chat_history = home_agent.format_chat_history() # make it a str
 
         # summarize chat history
-        summarizer = ChatHistorySummarizer()
-        interaction_summary = summarizer(self.agent_id, home_agent.chat_history)
+        interaction_summary = self.chat_summarizer(self.agent_id, home_agent.chat_history)
 
         # Check toxicity of the chat history
-        toxicity_checker = ToxicityChecker(self.db)
-        is_toxic = toxicity_checker(formatted_chat_history, self.agent_id)
+        toxicity_metric_output = self.toxicity_metric(formatted_chat_history, self.agent_id)
 
         # Store summary in memory
-        self.db.add_agent_data(self.agent_id, interaction_summary, is_toxic, interest_metric=interest_metric)
+        self.db.add_agent_data(self.agent_id, interaction_summary, toxicity_metric_output, interest_metric=interest_metric_output)
 
         # Testing
         print(f"Chat history: \n{formatted_chat_history}")
         print(f"Chat history summary: \n{interaction_summary}")
 
-        return interaction_summary
+        return interaction_summary, interest_metric_output, toxicity_metric_output # i just changed this, any where we're calling it should be able to parse 3 outputs instead of 1 like originally
     
-    def _run_interactions(self, home_agent, away_agent, init_prompt, expected_interactions, interest_threshold=5.0, extension=0, max_extensions=3):
+    def _run_interactions(self, home_agent, away_agent, init_prompt, expected_interactions, extension=0, max_extensions=3):
         for i in range(expected_interactions):
             if i == 0: # for initializing conversation
                 # home responds to init prompt
@@ -96,17 +104,20 @@ class Agent():
         away_agent_chat_history_str = away_agent.format_chat_history() # make it a str
 
         # eval conversation importance
-        interest_evaluator = ConversationMetric()
-        interest_metric = interest_evaluator(away_agent_chat_history_str, str(self.db.get_agent_memory(self.agent_id, away_agent_chat_history_str)))
+        interest_metric_output = self.interest_metric(
+            away_agent_chat_history_str, 
+            str(self.db.get_agent_memory(
+                self.agent_id, 
+                away_agent_chat_history_str)
+                )
+            )
 
         # recursive
-        if extension < max_extensions and interest_metric > interest_threshold:
+        if extension < max_extensions and interest_metric_output > self.interest_threshold:
             extension += 1 # update extension count
             self._run_interactions(home_agent, away_agent, "I'm interested in learning more about you.", expected_interactions, interest_threshold=interest_threshold, extension=extension, max_extensions=max_extensions)
 
-        return interest_metric
-
-
+        return interest_metric_output
 
 
 ########################## DSPY CLASSES ##########################
@@ -124,15 +135,22 @@ class AgentChatModule(dspy.Module):
         chat_history = dspy.InputField(desc="Chat history to avoid repeating.") # is this too inefficient to pass in every time?
         answer = dspy.OutputField(desc="A response to the other agent.")
 
-    def __init__(self, db, agent_id):
+    def __init__(self, db, agent_id, relevance_threshold=7):
         self.db = db
         self.agent_id = agent_id
         self.chat_history = [] # stored in the class so we can call it outside of the module
 
+        # main chain of thought
+        self.respond = dspy.ChainOfThought(self.AgentChatSignature)
+
+        # metrics
+        self.relevance_metric = RelevanceMetric()
+        self.relevance_threshold = relevance_threshold # 1-not relevant, 10-highly relevance, retries if below this
+
     def forward(self, prompt, instructions, retrieved_memories):
         # add some module here for interpeting the memories based on how we store their summaries. Picking the ones relevant to the conversation to compose context info string to be added to the prompt.
 
-        agent_chat_response = dspy.ChainOfThought(self.AgentChatSignature)(
+        agent_chat_response = self.respond(
             guidelines=instructions,
             prompt=prompt,
             memory_retrieval=retrieved_memories,
@@ -140,16 +158,21 @@ class AgentChatModule(dspy.Module):
         )
 
         # check relevance of the response
-        is_relevant = RelevanceChecker()
+        relevance_metric_output = self.relevance_metric(
+            memory_context=retrieved_memories, 
+            previous_chat_msg=agent_chat_response['answer']
+            ) # outputs a float
 
         # retry logic for relevance check
-        Suggest(is_relevant(memory_context=retrieved_memories, previous_chat_msg=agent_chat_response['answer']), 
-                "Your response should be more relevant to the memories or previous chat message.")
+        Suggest(relevance_metric_output > self.relevance_threshold,
+                "Your response should be more relevant to the memories or previous chat message.",
+                target_module="AgentChatSignature"
+                )
 
         # Add the latest response in the chat history
         self.append_chat_history(prompt, agent_chat_response['answer'])
 
-        return agent_chat_response
+        return agent_chat_response  #, relevance_metric_output
 
     # chat history stuff is currently setup to only use this agents chat history, but we can zip it together with it's partner agent later
     def append_chat_history(self, prompt, response):
@@ -175,59 +198,72 @@ class AgentChatModule(dspy.Module):
     
 
 ##################### EVALUATIONS/CHECKERS #####################
-class RelevanceChecker(dspy.Module):
-    class RelevanceCheckerSignature(dspy.Signature):
+class RelevanceMetric(dspy.Module):
+    class RelevanceMetricSignature(dspy.Signature):
         """
-        You are a checker of relevance for an agent engaged in a conversation.
-        Before the agent sends a response, you will check if it is based in facts from memory context, or the previous chat message. 
-        If a text string contains hallucinations not based in fact or conversation return 'No', otherwise return 'Yes'.
+        You are a relevance checker for a conversation, to make sure it stays on track and grounded in factual memories.
+        Your job is to evaluate how relevant a given string is to a set of memories.
+        Output a float score of 1.0-10.0 (1-less relevant, 10-more relevant)
         """
+        memory_context = dspy.InputField(desc="The grounded factual to make sure the conversation sticks to.")
+        previous_chat_msg = dspy.InputField(desc="Text string to check for relevance to the memories.")
+        is_relevant = dspy.OutputField(desc="1.0-10.0 relevance score")
 
-        memory_context = dspy.InputField(desc="the knowledge domain used in creating it's response.")
-        previous_chat_msg = dspy.InputField(desc="Text string to check for relevance.")
-        is_relevant = dspy.OutputField(desc="Yes or No")
+    class ParseRelevanceMetricSignature(dspy.Signature):
+        """
+        Your job to to extract the float value (a metric we want to isolate) from a given string.
+        """
+        given_str = dspy.InputField(desc="The string containing our desired float value")
+        metric = dspy.OutputField(desc="The isolated float value")
+
+    def __init__(self):
+        self.check_relevance = dspy.ChainOfThought(self.RelevanceMetricSignature)
+        self.parse = dspy.Predict(self.ParseRelevanceMetricSignature)
 
     def forward(self, memory_context, previous_chat_msg):
-        result = dspy.ChainOfThought(self.RelevanceCheckerSignature)(
+        result = self.check_relevance(
             memory_context=memory_context,
             previous_chat_msg=previous_chat_msg,
         ).is_relevant
 
-        if 'Yes' in result: print("The response is relevant.") 
-        else: print("The response is not relevant.")
-        
-        return 'Yes' in result        
+        result = float(self.parse(given_str=result).metric)
 
-class ToxicityChecker(dspy.Module):
-    class ToxicityCheckerSignature(dspy.Signature):
+        return result   
+
+class ToxicityMetric(dspy.Module):
+    class ToxicityMetricSignature(dspy.Signature):
         """
-        Check the toxicity of chat history and return 'Yes' if contains anything deemed as toxic by the settings, otherwise return 'No'.
-        Chat history should not include anything that is off limits according to the toxicity settings.
+        Your job is to evaluate if a conversation violated any of the given toxicity settings.
+        Return a float metric 1.0-10.0 (1-the conversation was extremely toxic, 10-the conversation was completely safe and fair).
         """
         toxicity_settings = dspy.InputField(desc="User settings for what is considered toxic.")
         chat_history = dspy.InputField(desc="Chat history to check for toxicity")
-        in_context_prompt = dspy.InputField(desc="In-context prompt for the agent")
-        answer = dspy.OutputField(desc="Yes or No")
+        answer = dspy.OutputField(desc="1.0-10.0")
+
+    class ParseToxicityMetricSignature(dspy.Signature):
+        """
+        Your job to to extract the float value (a metric we want to isolate) from a given string.
+        """
+        given_str = dspy.InputField(desc="The string containing our desired float value")
+        metric = dspy.OutputField(desc="The isolated float value")
 
     def __init__(self, db: dbObject):
         self.db = db
+        self.toxicity_metric = dspy.ChainOfThought(self.ToxicityMetricSignature)
+        self.parse = dspy.Predict(self.ParseToxicityMetricSignature)
 
     def forward(self, chat_history, home_agent_id):
         # call toxicity settings from db
         toxicity_settings = self.db.get_toxicty_settings(home_agent_id)
 
-        rationale_type = dspy.OutputField(
-            prefix="Reasoning: Let's think step by step in order to",
-            desc="Check if the chat history contains anything that the user settings consider toxic.",
-        )
-
-        result = dspy.ChainOfThought(self.ToxicityCheckerSignature, rationale_type=rationale_type)(
+        result = self.toxicity_metric(
             toxicity_settings=toxicity_settings,
             chat_history=chat_history,
         ).answer
 
-        # print(result)
-        return 'Yes' in result
+        result = self.parse(given_str=result).metric
+
+        return result
 
     # I'm thinking we should create another tag like the toxicity flag, but for positive things. Like if it finds anything highly relevant gets a good tag. 
 
@@ -311,8 +347,8 @@ class ChatHistorySummarizer(dspy.Module):
         # I really think we should include some examples of the format we want them to be stored in. They should include things like the date, away_agent_id, etc. This will be decided by how we interpret it on the recall side.
         # the module that turns the memories into conversation specific context should be able to interpret the format of the summary correctly.
         
-    def forward(self, home_agent_id, chat_history_list):
-        away_agent_id = chat_history_list[0]['agent_id'] if chat_history_list[0]['agent_id'] != home_agent_id else chat_history_list[1]['agent_id']
+    def forward(self, chat_history_list):
+        away_agent_id = chat_history_list[0]['agent_id'] if chat_history_list[0]['agent_id'] != self.agent_id else chat_history_list[1]['agent_id']
         rationale_type = dspy.OutputField(
             prefix="Reasoning: Let's think step by step in order to",
             desc=f"accurately summarize the chat history with very descriptive information about what was shared. I talked to {away_agent_id} about...",
@@ -320,7 +356,7 @@ class ChatHistorySummarizer(dspy.Module):
 
         chat_history_str = ""
         for item in chat_history_list:
-            label = 'Me' if item['agent_id'] == home_agent_id else f'Agent {item["agent_id"]}'
+            label = 'Me' if item['agent_id'] == self.agent_id else f'Agent {item["agent_id"]}'
             prompt_label = f'{label}: {item["prompt"]}' if label != 'Me' else label
             chat_history_str += f"{prompt_label}\n{label}: {item['response']}\n\n"
 
