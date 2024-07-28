@@ -91,14 +91,14 @@ class Agent():
         for i in range(expected_interactions):
             if i == 0: # for initializing conversation
                 # home responds to init prompt
-                home_response = home_agent.forward(prompt=init_prompt, instructions=self.instructions, retrieved_memories=str(self.db.get_agent_memory(self.agent_id, init_prompt)))
+                home_response = home_agent.forward(prompt=init_prompt, retrieved_memories=str(self.db.get_agent_memory(self.agent_id, init_prompt)))
                 # away responds to home's response
-                away_response = away_agent.forward(prompt=home_response['answer'], instructions=self.instructions, retrieved_memories=str(self.db.get_agent_memory(away_agent.agent_id, home_response['answer'])))
+                away_response = away_agent.forward(prompt=home_response['answer'], retrieved_memories=str(self.db.get_agent_memory(away_agent.agent_id, home_response['answer'])))
             else:
                 # home responds to away's response
-                home_response = home_agent.forward(prompt=away_response['answer'], instructions=self.instructions, retrieved_memories=str(self.db.get_agent_memory(self.agent_id, away_response['answer'])))
+                home_response = home_agent.forward(prompt=away_response['answer'], retrieved_memories=str(self.db.get_agent_memory(self.agent_id, away_response['answer'])))
                 # away responds to home's response
-                away_response = away_agent.forward(prompt=home_response['answer'], instructions=self.instructions, retrieved_memories=str(self.db.get_agent_memory(away_agent.agent_id, home_response['answer'])))
+                away_response = away_agent.forward(prompt=home_response['answer'], retrieved_memories=str(self.db.get_agent_memory(away_agent.agent_id, home_response['answer'])))
 
         # format chat history
         away_agent_chat_history_str = away_agent.format_chat_history() # make it a str
@@ -115,7 +115,7 @@ class Agent():
         # recursive
         if extension < max_extensions and interest_metric_output > self.interest_threshold:
             extension += 1 # update extension count
-            self._run_interactions(home_agent, away_agent, "I'm interested in learning more about you.", expected_interactions, interest_threshold=interest_threshold, extension=extension, max_extensions=max_extensions)
+            self._run_interactions(home_agent, away_agent, "I'm interested in learning more about you.", expected_interactions, interest_threshold=self.interest_threshold, extension=extension, max_extensions=max_extensions)
 
         return interest_metric_output
 
@@ -139,6 +139,7 @@ class AgentChatModule(dspy.Module):
         self.db = db
         self.agent_id = agent_id
         self.chat_history = [] # stored in the class so we can call it outside of the module
+        self.instructions = self.db.get_instructions(self.agent_id)
 
         # main chain of thought
         self.respond = dspy.ChainOfThought(self.AgentChatSignature)
@@ -147,11 +148,11 @@ class AgentChatModule(dspy.Module):
         self.relevance_metric = RelevanceMetric()
         self.relevance_threshold = relevance_threshold # 1-not relevant, 10-highly relevance, retries if below this
 
-    def forward(self, prompt, instructions, retrieved_memories):
+    def forward(self, prompt, retrieved_memories):
         # add some module here for interpeting the memories based on how we store their summaries. Picking the ones relevant to the conversation to compose context info string to be added to the prompt.
 
         agent_chat_response = self.respond(
-            guidelines=instructions,
+            guidelines=self.instructions,
             prompt=prompt,
             memory_retrieval=retrieved_memories,
             chat_history=str(self.chat_history),
