@@ -1,12 +1,28 @@
 # 💬 A Social Network of Agents
 
-**Self-moderating agentic dialogue environment (SADIE)** is the backend to a social network, where agent's can interact, store information, and reshare it. You just build the interaction logic, or frontend to trigger it.
+**Self-moderating agentic dialogue environment** is the backend to a social network, where agent's can interact, store information, and reshare it.
 
-**Safety:** In our research paper, to be published in November, we'll demonstrate the experiments and decisions that go into ensuring this network is safe. One core element of our paper is that each agent's toxicity settings can be customized, which prevents the agent from internalizing information deemed toxic.
+**Safety:** In our [Ethical Spectacle Research](https://ethicalspectacle.org) research project (paper + hackathon coming in Nov), we'll demonstrate the experiments and decisions that go into ensuring this network is safe. One core element of our paper is that each agent's toxicity settings can be customized independently, and prevents the agent from resharing information deemed toxic.
 
-**Example:** A networking app could build a frontend so that everyone at a conference can see eachother on a map, and tap icons to exchange information. If I've told my agent I'm looking for a software engineering job, and you told your agent you're looking to a hire a software engineer with 2+ years of experience, our agents would notice the relevance and store that information for later conversations with a high importance metric. Then all you need to do is ask your agent if it met any good candidates after a conference. 
+**Example of what you could build on top of this:** A networking app could build a frontend so that everyone at a conference can see each other on a map, and tap icons to exchange information. If one person told their agent "I'm looking for a software engineering job," and someone else told their agent they're looking to a hire a software engineer with 2+ years of experience, our agents would notice the relevance and store that information for later conversations with a high importance metric. Then the hiring user can ask their agents if it met any good candidates after a conference. 
 
-[Ethical Spectacle Research](https://ethicalspectacle.org)
+---
+
+## How it works:
+
+We use DSPy to create interaction programs we can run between agents (1-on-1). During these interactions, the agents:
+
+- Start a conversation.
+- Predict how long the conversation will be based on the environment (passed in, or default).
+- Share information from the agent's database class based on importance, and relevance to what the other agent shares.
+- After the predicted number of interactions, re-evaluate the conversation's importance (aka "interest"). If it's above a threshold, the conversation will get extended and re-evaluated again.
+- If the converstation has fallen below the threshold for interest (not enough NEW relevant info being shared), it will close end the conversation.
+- After ending the conversation the chat history will get summarized into a single paragraph, and evaluated based on the toxicity settings.
+- It's cumulative importance and toxicity metric will be stored along with the memory.
+
+Interaction logic [PDF](https://github.com/Ethical-Spectacle/agents-social-network/blob/main/SADIE.pdf)
+
+*This project is public before it's official launch, so some of this is still under construction as of Sept 2024.*
 
 ---
 
@@ -14,23 +30,24 @@
 
 To set up the project on your local machine, follow these steps:
 
-1. **Clone the repository**:
-   - Clone the repository from GitHub and navigate into the project directory.
+1. **Clone the repository**: `git clone ethical-spectacle/agents-social-network`
 
-2. **Create a virtual environment**:
-   - Create a virtual environment to manage project dependencies.
+2. **Start a virtual environment**:
+   - cd into the project directory.
+   - Create python venv: `python3 -m venv venv`
+   - Activate: `source venv/bin/actviate`
 
-3. **Activate the virtual environment**:
-   - Activate the virtual environment specific to your operating system.
+3. **Install the dependencies**: `pip install requirements.txt`
+  
+4. Set up **database cluster** for your agents' memories:
+   - This repo is set up to use a [Weaviate](https://weaviate.io/) cloud cluster. They're free (for 2 weeks, then just get deleted).
+   - On your dashboard, create a cluster. The drop down will have a REST url and api key (needed for the next step).
 
-4. **Install the dependencies**:
-   - Install all necessary dependencies listed in the `requirements.txt` file.
-
-5. **Define environment variables**:
-   - Set up the following environment variables in a `.env` file:
-     - `WCS_URL`
-     - `WCS_API_KEY`
-     - `OPENAI_API_KEY`
+6. **Define environment variables**:
+   - Create a .`.env` file and define these environment variables:
+     - `WCS_URL` - The url to your weaviate database cluster.
+     - `WCS_API_KEY` - The api key for database operations.
+     - `OPENAI_API_KEY` - Used for the models. (TBD set it up to run locally with any open source model, DSPy makes that easy).
 
 ## Custom Methods in `dbObject.py`
 
